@@ -1,10 +1,61 @@
 import { NextResponse } from "next/server";
 const AQ_SUB_KEY = process.env.AQ_SUB_KEY;
 
+// const mapRelationships = (products) => {
+//   const modelMap = {}; // {Model: SKU}
+//   const crossSells = {}; // {Model: ['related SKU', 'related SKU']}
+//   const groupedProducts = {}; // {parentModel: ['childSku']}
+
+//   // Step 1: Build map of model names to SKUs
+//   products.forEach((product) => {
+//     const modelName = product.models.mfrModel;
+//     if (modelName) {
+//       modelMap[modelName] = `${product.models.mfrModel} - ${product.productId}`;
+//     }
+//   });
+
+//   // Step 2: For each product, check AQSpecification for related models
+//   products.forEach((product) => {
+//     const modelName = product.models.mfrModel;
+//     const specString = product.specifications.AQSpecification;
+
+//     if (!crossSells[modelName]) {
+//       crossSells[modelName] = [];
+//     }
+//     if (!groupedProducts[modelName]) {
+//       groupedProducts[modelName] = [];
+//     }
+
+//     if (modelName && specString) {
+//       // Find models mentioned in the specification string
+//       const relatedModels = Object.keys(modelMap).filter((model) =>
+//         specString.includes(model)
+//       );
+
+//       relatedModels.forEach((relatedModel) => {
+//         crossSells[modelName].push(modelMap[relatedModel]);
+//       });
+
+//       // Add the current product (child) to the groupedProducts of each mentioned product (parent)
+//       relatedModels.forEach((relatedModel) => {
+//         if (!groupedProducts[relatedModel]) {
+//           groupedProducts[relatedModel] = [];
+//         }
+
+//         groupedProducts[relatedModel].push(modelMap[modelName]); // Add the child SKU to the parent's group
+//       });
+//     }
+//   });
+
+//   return {
+//     crossSells,
+//     groupedProducts,
+//   };
+// };
+
 const mapRelationships = (products) => {
   const modelMap = {}; // {Model: SKU}
-  const crossSells = {}; // {Model: ['related SKU', 'related SKU']}
-  const groupedProducts = {}; // {parentModel: ['childSku']}
+  const crossSells = {}; // {Model: ['related SKU']}
 
   // Step 1: Build map of model names to SKUs
   products.forEach((product) => {
@@ -22,9 +73,6 @@ const mapRelationships = (products) => {
     if (!crossSells[modelName]) {
       crossSells[modelName] = [];
     }
-    if (!groupedProducts[modelName]) {
-      groupedProducts[modelName] = [];
-    }
 
     if (modelName && specString) {
       // Find models mentioned in the specification string
@@ -32,26 +80,16 @@ const mapRelationships = (products) => {
         specString.includes(model)
       );
 
+      // Add related models to cross-sells
       relatedModels.forEach((relatedModel) => {
         crossSells[modelName].push(modelMap[relatedModel]);
-      });
-
-      // Add the current product (child) to the groupedProducts of each mentioned product (parent)
-      relatedModels.forEach((relatedModel) => {
-        if (!groupedProducts[relatedModel]) {
-          groupedProducts[relatedModel] = [];
-        }
-
-        groupedProducts[relatedModel].push(modelMap[modelName]); // Add the child SKU to the parent's group
       });
     }
   });
 
-  return {
-    crossSells,
-    groupedProducts,
-  };
+  return { crossSells };
 };
+
 
 const headers = [
   "ID",
@@ -144,8 +182,8 @@ const headers = [
 
   // "Meta: custom_fields",
   // "meta:documents",
-  // "meta:brand",
-  // "meta:certifications"
+  "meta:brand",
+  "meta:certifications"
 ];
 const escapeField = (field) => {
   if (field === undefined || field === null) {
@@ -226,9 +264,9 @@ function createCategory(
 }
 
 const mapProductCsv = async (item, aqCategories, productRelationships) => {
-  const { crossSells, groupedProducts } = productRelationships;
+
+  const { crossSells } = productRelationships;
   const crossSellsField = crossSells[item.models.mfrModel];
-  const groupedProductsField = groupedProducts[item.models.mfrModel];
 
   const categories = createCategory(item.productCategory, aqCategories);
 
@@ -261,7 +299,7 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
   const documents = item.documents;
 
   const newProduct = {
-    Type: groupedProductsField.length === 0 ? "simple" : "grouped",
+    Type: "simple",
     Published: "1",
     "Visibility in catalog": "visible",
     "In stock?": "1",
@@ -285,7 +323,6 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
 
     "Shipping class": item.freightClass,
     Images: images,
-    "Grouped products": groupedProductsField.join(", "),
     "Cross-sells": crossSellsField.join(", "),
     "meta:brand": item.brandName,
     "meta:certifications": item.certifications,
@@ -309,9 +346,8 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
 };
 
 const mapProductApi = async (item, aqCategories, productRelationships) => {
-  const { crossSells, groupedProducts } = productRelationships;
+  const { crossSells } = productRelationships;
   const crossSellsField = crossSells[item.models.mfrModel];
-  const groupedProductsField = groupedProducts[item.models.mfrModel];
 
   const categories = createCategory(item.productCategory, aqCategories);
 
@@ -331,7 +367,7 @@ const mapProductApi = async (item, aqCategories, productRelationships) => {
   }));
 
   const newProduct = {
-    Type: groupedProductsField.length === 0 ? "simple" : "grouped",
+    Type: "simple",
     Published: "1",
     Visibility: "visible",
     "In stock?": "1",
@@ -356,7 +392,6 @@ const mapProductApi = async (item, aqCategories, productRelationships) => {
 
     "Shipping class": item.freightClass,
     Images: item.pictures,
-    "Grouped products": groupedProductsField,
     "Cross-sells": crossSellsField,
     "meta:documents": item.documents,
     "meta:brand": item.brandName,
@@ -442,6 +477,8 @@ async function callAQforCategories() {
 
 
 
+
+
 export async function GET() {
   const cleveland = "9bcbe7a0-be0d-dd11-a23a-00304834a8c9";
   const atosa = "d0865b70-42ae-4fae-90dd-59fef12526e8";
@@ -452,9 +489,10 @@ export async function GET() {
   const productRelationships = mapRelationships(aqProducts);
 
   const mappedProducts = [];
-
+  
   try {
     for (const product of aqProducts) {
+   
       const mappedProduct = await mapProductCsv(
         product,
         aqCategories,
@@ -463,7 +501,6 @@ export async function GET() {
       mappedProducts.push(mappedProduct);
     }
     const csvContent = generateCSV(mappedProducts);
-    // console.log(mappedProducts)
 
     return new NextResponse(csvContent, {
       headers: {
