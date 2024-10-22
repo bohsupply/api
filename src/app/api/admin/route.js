@@ -1,57 +1,6 @@
 import { NextResponse } from "next/server";
 const AQ_SUB_KEY = process.env.AQ_SUB_KEY;
 
-// const mapRelationships = (products) => {
-//   const modelMap = {}; // {Model: SKU}
-//   const crossSells = {}; // {Model: ['related SKU', 'related SKU']}
-//   const groupedProducts = {}; // {parentModel: ['childSku']}
-
-//   // Step 1: Build map of model names to SKUs
-//   products.forEach((product) => {
-//     const modelName = product.models.mfrModel;
-//     if (modelName) {
-//       modelMap[modelName] = `${product.models.mfrModel} - ${product.productId}`;
-//     }
-//   });
-
-//   // Step 2: For each product, check AQSpecification for related models
-//   products.forEach((product) => {
-//     const modelName = product.models.mfrModel;
-//     const specString = product.specifications.AQSpecification;
-
-//     if (!crossSells[modelName]) {
-//       crossSells[modelName] = [];
-//     }
-//     if (!groupedProducts[modelName]) {
-//       groupedProducts[modelName] = [];
-//     }
-
-//     if (modelName && specString) {
-//       // Find models mentioned in the specification string
-//       const relatedModels = Object.keys(modelMap).filter((model) =>
-//         specString.includes(model)
-//       );
-
-//       relatedModels.forEach((relatedModel) => {
-//         crossSells[modelName].push(modelMap[relatedModel]);
-//       });
-
-//       // Add the current product (child) to the groupedProducts of each mentioned product (parent)
-//       relatedModels.forEach((relatedModel) => {
-//         if (!groupedProducts[relatedModel]) {
-//           groupedProducts[relatedModel] = [];
-//         }
-
-//         groupedProducts[relatedModel].push(modelMap[modelName]); // Add the child SKU to the parent's group
-//       });
-//     }
-//   });
-
-//   return {
-//     crossSells,
-//     groupedProducts,
-//   };
-// };
 
 const mapRelationships = (products) => {
   const modelMap = {}; // {Model: SKU}
@@ -122,6 +71,9 @@ const headers = [
   "Tags",
   "Shipping class",
   "Images",
+
+  
+  
   "Download limit",
   "Download expiry days",
   "Parent",
@@ -264,11 +216,14 @@ function createCategory(
 }
 
 const mapProductCsv = async (item, aqCategories, productRelationships) => {
+  const clevelandId = "9bcbe7a0-be0d-dd11-a23a-00304834a8c9"; // Cleveland ID
+
 
   const { crossSells } = productRelationships;
   const crossSellsField = crossSells[item.models.mfrModel];
 
   const categories = createCategory(item.productCategory, aqCategories);
+ 
 
   const images = item.pictures
     .map((pic) => {
@@ -296,15 +251,17 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
     };
   });
 
-  const documents = item.documents;
+  const documents = item.documents || [];
+
+
 
   const newProduct = {
     Type: "simple",
-    Published: "1",
+    Published: item.mfrId === clevelandId ? "0" : "1", // Set as draft for Cleveland products
     "Visibility in catalog": "visible",
     "In stock?": "1",
-    SKU: `${item.models.mfrModel} - ${item.productId}`,
-    Name: `${item.brandName || ""} ${item.models.mfrModel}`,
+    SKU: `${item.models.mfrModel} - ${item.mfrId}`,
+    Name: `${item.brandName} ${item.models.mfrModel}`,
     "Short description": item.specifications?.AQSpecification || "",
     Description:
       item.specifications?.AQSpecification?.split(",")
@@ -326,6 +283,7 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
     "Cross-sells": crossSellsField.join(", "),
     "meta:brand": item.brandName,
     "meta:certifications": item.certifications,
+    // ...downloads
   };
 
   attributes.forEach((obj) => {
@@ -333,6 +291,8 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
       newProduct[key] = obj[key];
     }
   });
+
+
 
   for (const doc of documents) {
     const headerName = `meta:documents-${doc.name}`;
@@ -342,6 +302,7 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
     newProduct[headerName] = doc.url;
   }
 
+// console.log(newProduct)
   return newProduct;
 };
 
