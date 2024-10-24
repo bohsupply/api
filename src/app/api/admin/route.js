@@ -218,6 +218,8 @@ function createCategory(
 const mapProductCsv = async (item, aqCategories, productRelationships) => {
   const clevelandId = "9bcbe7a0-be0d-dd11-a23a-00304834a8c9"; // Cleveland ID
 
+  const removeOddCommas = item.specifications?.AQSpecification?.replace(/, for,/g, " for ") || "";
+
 
   const { crossSells } = productRelationships;
   const crossSellsField = crossSells[item.models.mfrModel];
@@ -262,9 +264,9 @@ const mapProductCsv = async (item, aqCategories, productRelationships) => {
     "In stock?": "1",
     SKU: `${item.models.mfrModel} - ${item.mfrId}`,
     Name: `${item.brandName} ${item.models.mfrModel}`,
-    "Short description": item.specifications?.AQSpecification || "",
+    "Short description": removeOddCommas,
     Description:
-      item.specifications?.AQSpecification?.split(",")
+    removeOddCommas.split(",")
         .map((item) => `<li>${item.trim()}</li>`)
         .join("") || "",
     "Weight (lbs)": item.productDimension.shippingWeight,
